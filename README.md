@@ -12,11 +12,12 @@ Only verfified on Debian 12.
 **Prerequisitions**
 
 * A VPS with IPv4 address.
+
 * Install Debian 12. (Or any distro you like. This is a manually deployment that easily fit for other distro.)
 
 * The A-record (assuming xxx.yyy.zzz) to the IPv4 address of VPS. 
 
-
+* Firewall is assumed off.
 
 **Basic Setups**
 
