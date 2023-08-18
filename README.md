@@ -99,7 +99,7 @@ server {
         server_name xxx.yyy.zzz;
 
         location / {
-                try_files $uri $uri/ =404;
+                try_files \$uri \$uri/ =404;
         }
 }
 
@@ -133,18 +133,22 @@ sudo systemctl reload nginx
 sudo certbot --nginx -d xxx.yyy.zzz
 ````
 
-**Expected Output**
+**Sample Output**
 
->Successfully received certificate.
->Certificate is saved at: /etc/letsencrypt/live/xxx.yyy.zzz/fullchain.pem
->Key is saved at:         /etc/letsencrypt/live/xxx.yyy.zzz/privkey.pem
->This certificate expires on YYYY-MM-DD.
->These files will be updated when the certificate renews.
->Certbot has set up a scheduled task to automatically renew this certificate in the background.
+````
+Successfully received certificate.
+Certificate is saved at: /etc/letsencrypt/live/xxx.yyy.zzz/fullchain.pem
+Key is saved at:         /etc/letsencrypt/live/xxx.yyy.zzz/privkey.pem
+This certificate expires on YYYY-MM-DD.
+These files will be updated when the certificate renews.
+Certbot has set up a scheduled task to automatically renew this certificate in the background.
 
-> Deploying certificate
-> Successfully deployed certificate for xxx.yyy.zzz to /etc/nginx/sites-enabled/xxx.yyy.zzz
-> Congratulations! You have successfully enabled HTTPS on https://xxx.yyy.zzz.
+Deploying certificate
+Successfully deployed certificate for xxx.yyy.zzz to /etc/nginx/sites-enabled/xxx.yyy.zzz
+Congratulations! You have successfully enabled HTTPS on https://xxx.yyy.zzz.
+````
+
+
 
 
 
@@ -168,16 +172,20 @@ sudo bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-re
 
 **Sample Output**
 
-> installed: /usr/local/bin/xray
-> installed: /usr/local/share/xray/geoip.dat
-> installed: /usr/local/share/xray/geosite.dat
-> installed: /usr/local/etc/xray/config.json
-> installed: /var/log/xray/
-> installed: /var/log/xray/access.log
-> installed: /var/log/xray/error.log
-> installed: /etc/systemd/system/xray.service
-> installed: /etc/systemd/system/xray@.service
-> info: Xray v<x.y.z> is installed.
+````
+installed: /usr/local/bin/xray
+installed: /usr/local/share/xray/geoip.dat
+installed: /usr/local/share/xray/geosite.dat
+installed: /usr/local/etc/xray/config.json
+installed: /var/log/xray/
+installed: /var/log/xray/access.log
+installed: /var/log/xray/error.log
+installed: /etc/systemd/system/xray.service
+installed: /etc/systemd/system/xray@.service
+info: Xray v<x.y.z> is installed.
+````
+
+
 
 
 
@@ -189,7 +197,7 @@ sudo bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-re
 
 ````bash
 # performance improvement
-cat << EOL | sudo tee /etc/security/limits.conf
+cat << EOL | sudo tee -a /etc/security/limits.conf
 
   *                soft    nofile          65536
   *                hard    nofile          65536
@@ -319,7 +327,7 @@ server {
     add_header Strict-Transport-Security "max-age=63072000" always;
 
 	location / {
-        try_files $uri $uri/ =404;
+        try_files \$uri \$uri/ =404;
     }
 
 	# Added for xray
@@ -328,12 +336,12 @@ server {
         proxy_pass http://127.0.0.1:10086;
         proxy_http_version 1.1;
         proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
-        proxy_set_header Host $http_host;
+        proxy_set_header Host \$http_host;
         # Config for 0-RTT in TLSv1.3
-        proxy_set_header Early-Data $ssl_early_data;
+        proxy_set_header Early-Data \$ssl_early_data;
         }
 }
 
@@ -343,8 +351,8 @@ server {
     listen [::]:80;
     server_name xxx.yyy.zzz;
 
-	if ($host = xxx.yyy.zzz) {
-        return 301 https://$host$request_uri;
+	if (\$host = xxx.yyy.zzz) {
+        return 301 https://\$host\$request_uri;
     } # managed by Certbot
     return 404; # managed by Certbot
 }
