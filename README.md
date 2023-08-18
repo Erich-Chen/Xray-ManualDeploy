@@ -9,15 +9,357 @@ Only verfified on Debian 12.
 
 
 
+**Prerequisitions**
+
+* A VPS with IPv4 address.
+* Install Debian 12. (Or any distro you like. This is a manually deployment that easily fit for other distro.)
+
+* The A-record (assuming xxx.yyy.zzz) to the IPv4 address of VPS. 
+
+
+
+**Basic Setups**
+
+````bash
+# add sudo user if not yet
+adduser xray
+usermod -aG sudo xray
+
+# Log out and log in again as new user 'xray'
+# Or just switch user
+su -l xray
+
+sudo apt update && sudo apt upgrade -qy
+
+# Install some might used software, NOT all of the following software are manditory.
+sudo apt install vim git curl wget lsof tar cron unzip jq tmux -y
+````
+
+
+
 ## 2. Install Nginx Server
 
+````bash
+sudo apt update
 
-## 3. LetEncrypt Cert
+sudo apt install nginx -y
+
+# Allow firewall for both http and https traffic
+sudo ufw allow 'Nginx Full'
+
+# Performance improvement
+sudo vim /etc/nginx/nginx.conf
+# uncomment the following line
+# server_names_hash_bucket_size 64;
+````
+
+
+
+**Some Nginx Direcotries and Files**
+
+* `/var/www/html/` : Actual web content. New web content will be added into new directory like `/var/www/xxx.yyy.zzz/html/`.
+* `/etc/nginx/nginx.conf` : the main configuraiton file.
+* `/etc/nginx/sites-available/` : Per-site *server blocks*. Only used when one is linked into `sites-enabled`.
+* `/etc/nginx/sites-enabled/` : Per-site *site blocks*, typically softlinks from `sites-availabe`.
+
+
+
+**A dummy website**
+
+````bash
+sudo mkdir -p /var/www/xxx.yyy.zzz/html
+sudo chown -R $USER:$USER /var/www/xxx.yyy.zzz/html
+sudo chmod -R 755 /var/www/xxx.yyy.zzz
+
+# Create a very dummy website
+cat << EOL | tee /var/www/xxx.yyy.zzz/html/index.html
+# A sample website
+<html>
+    <head>
+        <title>My XXX Site</title>
+    </head>
+    <body>
+        <h1>Success! Seeing this page means my Nginx server is successfully configured for <em>xxx.yyy.zzz</em>. </h1>
+        <p>This is a sample page.</p>
+    </body>
+</html>
+
+EOL
+
+# Create a per-site server block
+cat << EOL | sudo tee /etc/nginx/sites-available/xxx.yyy.zzz
+server {
+        listen 80;
+        listen [::]:80;
+
+        root /var/www/xxx.yyy.zzz/html;
+        index index.html index.htm index.nginx-debian.html;
+
+        server_name xxx.yyy.zzz;
+
+        location / {
+                try_files $uri $uri/ =404;
+        }
+}
+
+EOL
+
+# link to sites-available to make it enabled
+sudo ln -s /etc/nginx/sites-available/xxx.yyy.zzz /etc/nginx/sites-enabled/
+
+# Syntax check
+sudo nginx -t
+
+# Expected outputs:
+# nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+# nginx: configuration file /etc/nginx/nginx.conf test is successful
+
+sudo systemctl restart nginx
+
+# Repeat this step to build more sub websites
+````
+
+
+
+## 3. Secure Nginx with Let's Encrypt Certificate (certbot)
+
+
+
+````bash
+sudo apt install certbot python3-certbot-nginx -y
+sudo systemctl reload nginx
+
+sudo certbot --nginx -d xxx.yyy.zzz
+````
+
+**Expected Output**
+
+>Successfully received certificate.
+>Certificate is saved at: /etc/letsencrypt/live/xxx.yyy.zzz/fullchain.pem
+>Key is saved at:         /etc/letsencrypt/live/xxx.yyy.zzz/privkey.pem
+>This certificate expires on YYYY-MM-DD.
+>These files will be updated when the certificate renews.
+>Certbot has set up a scheduled task to automatically renew this certificate in the background.
+
+> Deploying certificate
+> Successfully deployed certificate for xxx.yyy.zzz to /etc/nginx/sites-enabled/xxx.yyy.zzz
+> Congratulations! You have successfully enabled HTTPS on https://xxx.yyy.zzz.
+
+
+
+````bash
+# check certbot auto renew status
+
+sudo systemctl status certbot.timer
+sudo certbot renew --dry-run
+````
+
 
 
 ## 4. Install Xray-Core
 
+````bash
+# Install / Upgrade X-ray core
+sudo bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
+````
+
+
+
+**Sample Output**
+
+> installed: /usr/local/bin/xray
+> installed: /usr/local/share/xray/geoip.dat
+> installed: /usr/local/share/xray/geosite.dat
+> installed: /usr/local/etc/xray/config.json
+> installed: /var/log/xray/
+> installed: /var/log/xray/access.log
+> installed: /var/log/xray/error.log
+> installed: /etc/systemd/system/xray.service
+> installed: /etc/systemd/system/xray@.service
+> info: Xray v<x.y.z> is installed.
+
+
 
 ## 5. Configure VLESS with Nginx Forward
 
+
+
+**Performance Improvement**
+
+````bash
+# performance improvement
+cat << EOL | sudo tee /etc/security/limits.conf
+
+  *                soft    nofile          65536
+  *                hard    nofile          65536
+
+EOL
+````
+
+
+
+**Create `config.json` file for Xray**
+
+````bash
+# Create config.json file for Xray
+# The following is a copy from https://raw.githubusercontent.com/wulabing/Xray_onekey/nginx_forward/config/xray_tls_ws.json
+# Must modify the values in the following lines
+# L19: "port": 10086,
+# L26: "id": "3f3effce-2640-4f29-b95b-a2106df6d96d",
+# The uuid can be generated by command `xray uuid`
+# L35: "path": "/e01ec5ea/"
+# 
+# 
+cat << EOL | sudo tee /usr/local/etc/xray/config.json
+{
+  "log": {
+    "access": "/var/log/xray/access.log",
+    "error": "/var/log/xray/error.log",
+    "loglevel": "warning"
+  },
+  "inbounds": [
+    {
+      "port": 10086,
+      "listen": "127.0.0.1",
+      "tag": "VLESS-in",
+      "protocol": "VLESS",
+      "settings": {
+        "clients": [
+          {
+            "id": "3f3effce-2640-4f29-b95b-a2106df6d96d",
+            "alterId": 0
+          }
+        ],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "ws",
+        "wsSettings": {
+          "path": "/e01ec5ea/"
+        }
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "protocol": "freedom",
+      "settings": {},
+      "tag": "direct"
+    },
+    {
+      "protocol": "blackhole",
+      "settings": {},
+      "tag": "blocked"
+    }
+  ],
+  "dns": {
+    "servers": [
+      "https+local://1.1.1.1/dns-query",
+      "1.1.1.1",
+      "1.0.0.1",
+      "8.8.8.8",
+      "8.8.4.4",
+      "localhost"
+    ]
+  },
+  "routing": {
+    "domainStrategy": "AsIs",
+    "rules": [
+      {
+        "type": "field",
+        "inboundTag": [
+          "VLESS-in"
+        ],
+        "outboundTag": "direct"
+      }
+    ]
+  }
+}
+
+EOL
+````
+
+
+
+**Configure nginx forward for Xray**
+
+````bash
+# configure nginx forward for Xray
+# The following is a combination of standard nginx server block and wulabing's
+# https://raw.githubusercontent.com/wulabing/Xray_onekey/nginx_forward/config/web.conf
+# Ensure to modify the values in the following lines:
+# L23, L57: server_name xxx.yyy.zzz;
+# L39: location /e01ec5ea/
+# L41: proxy_pass http://127.0.0.1:10086;
+#
+#
+cat << EOL | sudo tee /etc/nginx/sites-available/xxx.yyy.zzz
+server {
+
+    listen 443 ssl http2;   # modified for xray
+    listen [::]:443 ssl http2 ipv6only=on; # managed by Certbot, modified for xray
+
+    ssl_certificate        /etc/letsencrypt/live/xxx.yyy.zzz/fullchain.pem; # managed by Certbot
+    ssl_certificate_key    /etc/letsencrypt/live/xxx.yyy.zzz/privkey.pem; # managed by Certbot
+    include                /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam            /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+    # ssl_protocols          TLSv1.3; # required by xray but already included in /etc/letsencrypt/options-ssl-nginx.conf
+    ssl_ecdh_curve         X25519:P-256:P-384:P-521; # added for xray
+
+    server_name xxx.yyy.zzz;
+
+    root /var/www/xxx.yyy.zzz/html;
+    index index.html index.htm index.nginx-debian.html;
+
+    # Config for 0-RTT in TLSv1.3, added for xray
+    ssl_early_data on;
+    ssl_stapling on;
+    ssl_stapling_verify on;
+    add_header Strict-Transport-Security "max-age=63072000" always;
+
+	location / {
+        try_files $uri $uri/ =404;
+    }
+
+	# Added for xray
+	location /e01ec5ea/ {
+        proxy_redirect off;
+        proxy_pass http://127.0.0.1:10086;
+        proxy_http_version 1.1;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $http_host;
+        # Config for 0-RTT in TLSv1.3
+        proxy_set_header Early-Data $ssl_early_data;
+        }
+}
+
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name xxx.yyy.zzz;
+
+	if ($host = xxx.yyy.zzz) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+    return 404; # managed by Certbot
+}
+
+EOL
+````
+
+
+
+
+
+````bash
+# Restart to take effect
+sudo nginx -t
+sudo systemctl restart nginx
+
+sudo systemctl restart xray
+````
 
