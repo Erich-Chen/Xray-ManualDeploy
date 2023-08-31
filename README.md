@@ -128,11 +128,7 @@ curl $myurl
 # Repeat this step to build more websites
 ````
 
-
-
 ## 3. Secure Nginx with Let's Encrypt Certificate (certbot)
-
-
 
 ````bash
 sudo apt install certbot python3-certbot-nginx -y
